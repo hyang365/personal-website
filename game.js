@@ -217,43 +217,93 @@ function createGame() {
     const startRotation=camera.quaternion.clone().invert().multiply(target.source.getWorldQuaternion(new T.Quaternion()));
     const type=entries[target.key].kind;
     const isPage=type==='Folder'||type==='Book';
-    const goal=isPage?new T.Vector3(.34,-.02,-1.00):new T.Vector3(0,-.52,-1.14);
-    const rotation=new T.Quaternion().setFromEuler(new T.Euler(isPage?1.54:-.055,-.08,isPage?-.065:0));
+    const goal=isPage?new T.Vector3(.59*Math.min(1,handCamera.aspect/1.35),-.035,-1.78):new T.Vector3(0,-.52,-1.14);
+    const rotation=new T.Quaternion().setFromEuler(new T.Euler(isPage?Math.PI/2:-.055,isPage?0:-.08,0));
     clone.position.copy(start);clone.quaternion.copy(startRotation);
     clone.traverse(m=>{if(m.isMesh){m.castShadow=false;m.receiveShadow=false;if(m.userData.paper)m.visible=false;}});
     target.source.visible=false;hands.scene.add(clone);sceneChanged=true;
     inspection={target,clone,hinge,spin,start,startRotation,goal,rotation,isPage,t:0,closing:false,shown:false};
   }
-  const paper=document.createElement('section');
-  paper.className='held-paper';paper.hidden=true;
-  paper.innerHTML='<article><h2></h2><div class="paper-body"></div></article><nav><button aria-label="Previous page">←</button><span></span><button aria-label="Next page">→</button><button>Put back</button></nav>';
-  stage.append(paper);
-  let pageIndex=0,pages=[];
-  function paintPage(){
-    const data=pages[pageIndex];
-    paper.querySelector('h2').textContent=data.title;
-    paper.querySelector('.paper-body').textContent=data.body;
-    paper.querySelector('nav span').textContent=(pageIndex+1)+' / '+pages.length;
-    paper.querySelectorAll('button')[0].disabled=pageIndex===0;
-    paper.querySelectorAll('button')[1].disabled=pageIndex===pages.length-1;
+  function paperTexture(page,index,total){
+    const canvas=document.createElement('canvas');
+    canvas.width=2048;canvas.height=1344;
+    const c=canvas.getContext('2d');
+    c.fillStyle='#f4ecd9';c.fillRect(0,0,2048,1344);
+    c.fillStyle='#383128';c.font='100px Georgia';c.fillText(page.title,140,180,1760);
+    c.strokeStyle='#c7b897';c.lineWidth=2;c.beginPath();c.moveTo(140,230);c.lineTo(1900,230);c.stroke();
+    c.font='60px Georgia';
+    let y=325;
+    for(const paragraph of page.body.split('\n')){
+      let line='';
+      for(const word of paragraph.split(' ')){
+        if(c.measureText(line+word).width>1760){
+          c.fillText(line,140,y);y+=88;line='';
+        }
+        line+=word+' ';
+      }
+      c.fillText(line,140,y);y+=104;
+    }
+    c.font='40px monospace';c.fillStyle='#82745c';
+    c.fillText('← Previous     '+(index+1)+' / '+total+'     Next →',140,1245);
+    c.textAlign='right';c.fillText('ESC · Put back',1900,1245);
+    const texture=new T.CanvasTexture(canvas);
+    texture.colorSpace=T.SRGBColorSpace;
+    texture.magFilter=T.LinearFilter;texture.minFilter=T.LinearMipmapLinearFilter;
+    return texture;
   }
   function openPaper(key){
-    const item=entries[key];
-    pages=item.pages??[{title:item.title,body:item.body},{title:'Notes',body:'Add your next page in content.js.'}];
-    pageIndex=0;paintPage();paper.hidden=false;
+    const i=inspection,item=entries[key];
+    i.pages=item.pages??[{title:item.title,body:item.body}];
+    const measure=document.createElement('canvas').getContext('2d');
+    measure.font='60px Georgia';
+    i.pages=i.pages.flatMap(page=>{
+      const lines=[];
+      for(const paragraph of page.body.split('\n')){
+        let line='';
+        for(const word of paragraph.split(' ')){
+          if(measure.measureText(line+word).width>1760){lines.push(line.trim());line='';}
+          line+=word+' ';
+        }
+        lines.push(line.trim());
+      }
+      const sheets=[];
+      for(let at=0;at<Math.max(1,lines.length);at+=8)
+        sheets.push({title:page.title,body:lines.slice(at,at+8).join('\n')});
+      return sheets;
+    });
+    i.pageIndex=0;
+    i.pageMaps=i.pages.map((page,index)=>paperTexture(page,index,i.pages.length));
+    const pivot=new T.Group();pivot.position.set(-.58,.105,.04);
+    const sheet=new T.Mesh(new T.PlaneGeometry(1.16,.74),
+      new T.MeshBasicMaterial({map:i.pageMaps[0],side:T.DoubleSide}));
+    sheet.rotation.x=-Math.PI/2;sheet.position.x=.58;
+    pivot.add(sheet);i.clone.add(pivot);
+    i.paperPivot=pivot;i.paperMesh=sheet;i.flip=null;
+    stage.classList.add('reading');resize();
   }
-  function closePaper(){paper.hidden=true;if(inspection){inspection.closing=true;inspection.t=1;}canvasFocus();}
-  paper.querySelectorAll('button').forEach((button,index)=>{
-    button.onclick=()=>{
-      if(index===2){closePaper();return;}
-      const next=pageIndex+(index===0?-1:1);
-      if(next<0||next>=pages.length)return;
-      const article=paper.querySelector('article');
-      const animation=article.animate([{transform:'rotateY(0deg)'},{transform:'rotateY(-88deg)',opacity:.5}],{duration:220,easing:'ease-in'});
-      animation.onfinish=()=>{pageIndex=next;paintPage();article.animate([{transform:'rotateY(88deg)',opacity:.5},{transform:'rotateY(0deg)',opacity:1}],{duration:240,easing:'ease-out'});};
-    };
+  function turnPage(direction){
+    const i=inspection;
+    if(!i?.paperMesh||i.flip||i.closing)return;
+    const next=i.pageIndex+direction;
+    if(next<0||next>=i.pages.length)return;
+    const turning=i.paperMesh.clone();
+    turning.material=i.paperMesh.material.clone();
+    const pivot=new T.Group();pivot.position.copy(i.paperPivot.position);
+    pivot.position.y+=.008;pivot.add(turning);i.clone.add(pivot);
+    i.flip={pivot,mesh:turning,t:0,next,direction};
+    if(direction>0)i.paperMesh.material.map=i.pageMaps[next];
+    else{turning.material.map=i.pageMaps[next];pivot.rotation.z=Math.PI;}
+  }
+  function closePaper(){
+    if(inspection?.isPage){inspection.closing=true;inspection.t=1;}
+    canvasFocus();
+  }
+  window.addEventListener('keydown',event=>{
+    if(!inspection?.isPage||help.open)return;
+    if(event.key==='Escape')closePaper();
+    if(event.key==='ArrowRight'){event.preventDefault();turnPage(1);}
+    if(event.key==='ArrowLeft'){event.preventDefault();turnPage(-1);}
   });
-  window.addEventListener('keydown',event=>{if(event.key==='Escape'&&!paper.hidden)closePaper();});
   entry.addEventListener('close',()=>{
     if(inspection){inspection.closing=true;inspection.t=1;}
     canvasFocus();
@@ -373,15 +423,26 @@ function createGame() {
     const t=smooth(i.t);
     i.clone.position.lerpVectors(i.start,i.goal,t);
     i.clone.quaternion.copy(i.startRotation).slerp(i.rotation,t);
-    const scale=i.isPage?1.05:.72;
+    const scale=i.isPage?Math.min(1,handCamera.aspect/1.35):.72;
     i.clone.scale.setScalar(T.MathUtils.lerp(1,scale,t));
-    if(i.hinge)i.hinge.rotation.z=smooth(limit((i.t-.32)/.64,0,1))*2.55;
+    if(i.hinge)i.hinge.rotation.z=smooth(limit((i.t-.32)/.64,0,1))*Math.PI;
+    if(i.flip){
+      const flip=i.flip;flip.t=Math.min(1,flip.t+dt/(reduced?.05:.65));
+      flip.pivot.rotation.z=Math.PI*(flip.direction>0?smooth(flip.t):1-smooth(flip.t));
+      if(flip.t===1){
+        i.pageIndex=flip.next;i.paperMesh.material.map=i.pageMaps[i.pageIndex];
+        flip.pivot.removeFromParent();flip.mesh.material.dispose();i.flip=null;
+      }
+    }
     if(i.spin)i.spin.rotation.y+=dt*1.18;
     if(i.t===1&&!i.shown){i.shown=true;if(i.isPage)openPaper(i.target.key);else showEntry(i.target.key);}
     if(i.t===0&&i.closing){
       i.target.source.visible=true;
       i.clone.removeFromParent();
-      inspection=null;sceneChanged=true;
+      if(i.flip){i.flip.mesh.material.dispose();i.flip=null;}
+      i.pageMaps?.forEach(map=>map.dispose());
+      i.paperMesh?.geometry.dispose();i.paperMesh?.material.dispose();
+      inspection=null;sceneChanged=true;stage.classList.remove('reading');resize();
     }
   }
   function handAnimation(dt) {
@@ -550,10 +611,16 @@ function createGame() {
   }
   function turn(dx,dy) {
     if(transition||inspection||help.open)return;
-    yaw-=dx*.0031; pitch=limit(pitch-dy*.0031,-1.29,1.24);
+    const sensitivity=Number($('sensitivity').value)*.001;
+    yaw-=dx*sensitivity; pitch=limit(pitch-dy*sensitivity,-1.29,1.24);
   }
   screen.addEventListener('pointerdown',e=>{
     if(e.button!==0)return;
+    if(inspection?.isPage){
+      pointerCoordinates(e);
+      turnPage(mouse.x<0?-1:1);return;
+    }
+    if(!locked)lookButton.click();
     pointerCoordinates(e);
     moved=0;
     drag={x:e.clientX,y:e.clientY,id:e.pointerId};
@@ -563,8 +630,7 @@ function createGame() {
   window.addEventListener('pointermove',e=>{
     pointerCoordinates(e);
     if(locked){turn(e.movementX,e.movementY);return;}
-    if(e.target!==screen||inspection||help.open)return;
-    turn(e.movementX,e.movementY);
+    if(drag&&e.target===screen){moved+=Math.abs(e.movementX)+Math.abs(e.movementY);turn(e.movementX,e.movementY);}
   });
   screen.addEventListener('pointerdown',()=>beginShot());
   screen.addEventListener('pointerup',e=>{
@@ -576,6 +642,13 @@ function createGame() {
   screen.addEventListener('pointercancel',()=>{
     drag=null;chargeStart=null;screen.classList.remove('dragging');
   });
+  $('resume-look').onclick=()=>{help.close();lookButton.click();};
+  $('fullscreen').onclick=()=>{
+    if(document.fullscreenElement)document.exitFullscreen?.();
+    else document.documentElement.requestFullscreen?.().catch(()=>{});
+  };
+  try{$('sensitivity').value=localStorage.getItem('look-sensitivity')??'1.6';}catch{}
+  $('sensitivity').oninput=()=>{try{localStorage.setItem('look-sensitivity',$('sensitivity').value);}catch{}};
   lookButton.onclick=()=>{
     if(!screen.requestPointerLock){say('Drag the scene to look around');return;}
     try{
@@ -600,6 +673,8 @@ function createGame() {
   window.addEventListener('keydown',e=>{
     if(entry.open||help.open||e.metaKey||e.ctrlKey||e.altKey)return;
     const key=e.key.toLowerCase();
+    if(key==='p'){help.showModal();if(locked)document.exitPointerLock();return;}
+    if(inspection?.isPage)return;
     if(e.target instanceof HTMLButtonElement && (key===' '||key==='enter'))return;
     if(movementKeys.includes(key)){e.preventDefault();keys.add(key);}
     if(key===' '){e.preventDefault();if(!e.repeat)toggleSeat();}
@@ -616,7 +691,7 @@ function createGame() {
   function resize(){
     width=stage.clientWidth;height=stage.clientHeight;
     if(!width||!height)return;
-    const renderScale=renderer.isSoftware?Math.min(1,320/height):limit(470/height,.5,.84);
+    const renderScale=inspection?.isPage?Math.min(1.5,1200/height):renderer.isSoftware?Math.min(1,360/height):Math.min(1,800/height);
     renderer.setSize(Math.round(width*renderScale),Math.round(height*renderScale),false);
     camera.aspect=handCamera.aspect=width/height;
     camera.fov=T.MathUtils.radToDeg(2*Math.atan(Math.max(Math.tan(T.MathUtils.degToRad(room===court?30:27)),.85/camera.aspect)));

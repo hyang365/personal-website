@@ -182,6 +182,40 @@ function bookcase(parent,x,z) {
   }
   return p;
 }
+function artPrint(parent,w,h,x,y,z,variant=0){
+  const map=texture(768,1024,(c)=>{
+    c.fillStyle='#e4d8ba';c.fillRect(0,0,768,1024);
+    c.fillStyle='#c7b996';c.fillRect(36,36,696,952);
+    c.fillStyle=['#697860','#b77e5b','#567272'][variant%3];c.fillRect(58,58,652,810);
+    if(variant===1){
+      c.fillStyle='#e6ba74';c.beginPath();c.arc(490,275,125,0,TAU);c.fill();
+      for(let i=0;i<5;i++){
+        c.fillStyle=['#98765b','#81664e','#635d48','#4d5744','#354a3b'][i];
+        c.beginPath();c.moveTo(58,868);
+        for(let x=58;x<=710;x+=8)c.lineTo(x,450+i*77+Math.sin(x*.008+i)*85+Math.sin(x*.023+i)*18);
+        c.lineTo(710,868);c.fill();
+      }
+    }else{
+      c.strokeStyle='#d6d5ac';c.lineWidth=8;
+      for(let stem=0;stem<5;stem++){
+        const sx=260+stem*54, top=170+(stem%3)*72;
+        c.beginPath();c.moveTo(380,815);c.quadraticCurveTo(sx-65,460,sx,top);c.stroke();
+        for(let j=0;j<7;j++){
+          const y=top+j*78, x=sx+(380-sx)*(y-top)/(815-top);
+          const sign=j%2?1:-1;
+          c.fillStyle=['#afb687','#d0cda1','#8eaa83'][j%3];
+          c.beginPath();c.moveTo(x,y);c.bezierCurveTo(x+sign*160,y-115,x+sign*160,y+36,x,y+25);c.fill();
+          c.strokeStyle='#647758';c.lineWidth=2;c.beginPath();c.moveTo(x,y+15);c.lineTo(x+sign*96,y-36);c.stroke();
+        }
+      }
+    }
+    c.fillStyle='#3e493b';c.textAlign='center';c.font='28px Georgia';
+    c.fillText(['BOTANICAL STUDY','GOLDEN HOUR','FERNS & FRONDS'][variant%3],384,923);
+    c.font='15px monospace';c.fillText('FIELD COLLECTION',384,957);
+  });
+  map.magFilter=T.LinearFilter;map.minFilter=T.LinearMipmapLinearFilter;
+  return mesh(parent,new T.PlaneGeometry(w,h),basic(0xffffff,map),x,y,z,false);
+}
 function duskWindow(parent) {
   const g=group(parent,-2.63,1.91,-4.51);
   const tex=texture(320,210,(c,w,h)=>{
@@ -370,7 +404,7 @@ export function makeStudy(entries) {
   plant(window,-.77,-.842,.24,.54,2);
   const sideArt=group(s,-4.59,1.94,-1.62);sideArt.rotation.y=Math.PI/2;
   box(sideArt,1.10,.80,.075,0,0,0,darkWood);
-  plaque(sideArt,['AFTER','HOURS'],.98,.68,0,0,.042,{bg:'#827357',ink:'#e1c991',size:30,border:'#b5975d'});
+  artPrint(sideArt,.98,.68,0,0,.042,1);
   bookcase(s,.21,-4.20);
   floorLamp(s,1.83,-3.75);
   plant(s,-3.83,0,-3.23,1.79,2);
@@ -388,7 +422,7 @@ export function makeStudy(entries) {
       c.beginPath();c.moveTo(8,83);c.lineTo(8,55+i*6);c.lineTo(41+i*7,30+i*10);c.lineTo(92+i*6,67+i*7);c.lineTo(120,57+i*10);c.lineTo(120,89);c.lineTo(8,89);c.fill();
     }
   });
-  mesh(rightArt,new T.PlaneGeometry(1.10,.77),basic(0xffffff,print),0,0,.044,false);
+  artPrint(rightArt,1.10,.77,0,0,.044,1);
   const doors=door(s,3.05,-4.49);
   rug(s,0,.75,6.6,4.7);
   const desk=group(s,0,0,.76);
@@ -433,7 +467,7 @@ export function makeStudy(entries) {
   for(let i=0;i<3;i++){
     const g=group(s,4.58,1.65+i*.44,1.2+i*.48);g.rotation.y=-Math.PI/2;
     box(g,.53,.62,.07,0,0,0,darkWood);
-    plaque(g,['BOTANICAL',String(i+1)],.44,.53,0,0,.042,{bg:'#b0ac83',ink:'#4a593e',size:17});
+    artPrint(g,.44,.53,0,0,.042,i);
   }
   box(s,1.5,.08,.34,3.55,1.63,4.46,wood);
   plant(s,3.12,1.68,4.43,.7,2);
