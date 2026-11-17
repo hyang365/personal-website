@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#161812">
+<meta name="description" content="Explore Hunter Yang's interactive first-person portfolio.">
+<title>Hunter Yang — Personal Archive</title>
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<main class="frame">
+  <header class="masthead">
+    <div class="identity"><span class="mark" aria-hidden="true">HY</span><div><h1>Hunter Yang</h1><p>Personal Archive</p></div></div>
+    <button id="help-button" class="hud-button" type="button"><span aria-hidden="true">?</span> Controls</button>
+  </header>
+  <section id="stage" class="stage" aria-label="First-person portfolio">
+    <div id="world"></div>
+    <div class="screen-effect" aria-hidden="true"></div>
+    <div class="screen-ui">
+      <div class="location"><span class="location-dot"></span><span id="location">The Study</span></div>
+      <div id="pose" class="pose">Seated</div>
+      <div id="labels"></div>
+      <button id="look-button" class="look-button" type="button" hidden>Capture mouse</button>
+      <div id="reticle" class="reticle" hidden aria-hidden="true">+</div>
+      <div id="score" class="score" hidden>MADE <strong>0</strong> <span>/</span> <small>0</small></div>
+      <div id="prompt" class="prompt" aria-live="polite">Point at an object to inspect it</div>
+      <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+    </div>
+    <div id="fade" class="fade" aria-hidden="true"></div>
+    <div id="unavailable" class="unavailable" hidden><p>3D rendering is unavailable in this browser. You can still open the archive below.</p><div id="fallback-items"></div></div>
+    <dialog id="entry" class="entry" aria-labelledby="entry-title">
+      <div class="entry-top"><span id="entry-kind"></span><button id="close-entry" class="hud-button" type="button" aria-label="Close entry">×</button></div>
+      <h2 id="entry-title"></h2><p id="entry-body"></p><div id="entry-links"></div>
+      <button id="return-item" class="return-item" type="button">Put back <kbd>Esc</kbd></button>
+    </dialog>
+    <dialog id="help" class="help" aria-labelledby="help-title">
+      <div class="entry-top"><h2 id="help-title">Controls</h2><button id="close-help" class="hud-button" type="button" aria-label="Close controls">×</button></div>
+      <dl><dt><kbd>Space</kbd></dt><dd>Stand, or sit when near the chair</dd><dt><kbd>W A S D</kbd> <kbd>↑ ← ↓ →</kbd></dt><dd>Move while standing</dd><dt>Mouse</dt><dd>Point while seated. Capture the mouse or drag to look around while standing.</dd><dt>Click <kbd>E</kbd></dt><dd>Inspect objects, use the door, or pick up a ball</dd><dt>Hold and release click <kbd>F</kbd></dt><dd>Charge and shoot a basketball. Press E to put one down.</dd><dt><kbd>R</kbd></dt><dd>Return to the chair or reset the basketballs</dd><dt><kbd>Esc</kbd></dt><dd>Close an entry or release the mouse</dd></dl>
+    </dialog>
+  </section>
+  <footer class="controls" aria-label="Quick controls">
+    <div class="key-guide"><span><kbd>W A S D</kbd><span>Move</span></span><button id="seat-button" type="button"><kbd>Space</kbd><span id="seat-guide">Stand</span></button><span><kbd>Mouse</kbd><span>Look</span></span><span><kbd>Click</kbd><span id="interaction-guide">Inspect</span></span></div>
+    <button id="reset-button" type="button" class="reset"><span aria-hidden="true">↺</span><span id="reset-guide">Reset view</span></button>
+  </footer>
+</main>
+<script type="module" src="./game.js"></script>
+</body>
+</html>
