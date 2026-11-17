@@ -74,6 +74,17 @@ function mesh(parent, geo, material, x=0,y=0,z=0, casts=true) {
   m.castShadow=casts;m.receiveShadow=true;parent.add(m);return m;
 }
 export function box(parent,w,h,d,x,y,z,m,casts=true) {
+  const doorway=parent.isScene&&d<.35&&w>2&&((z< -4.3&&z> -4.9)||(z< -15.5&&z> -16.2));
+  if(doorway&&y-h/2<2.7){
+    const center=z< -10?5.87:3.05, left=center-.72,right=center+.72;
+    const start=x-w/2,end=x+w/2;
+    const group=new T.Group();parent.add(group);
+    if(left>start)mesh(group,new T.BoxGeometry(left-start,h,d),m,(start+left)/2,y,z,casts);
+    if(end>right)mesh(group,new T.BoxGeometry(end-right,h,d),m,(end+right)/2,y,z,casts);
+    const top=y+h/2;
+    if(top>2.7)mesh(group,new T.BoxGeometry(1.44,top-2.7,d),m,center,(top+2.7)/2,z,casts);
+    return group;
+  }
   return mesh(parent,new T.BoxGeometry(w,h,d),m,x,y,z,casts);
 }
 function cyl(parent,top,bottom,h,x,y,z,m,sides=8) {
@@ -91,13 +102,15 @@ function bar(parent,a,b,r,m,sides=5) {
 }
 function plaque(parent,textRows,w,h,x,y,z,options={}) {
   const {bg='#d1b384', ink='#422b21', size=25, border='#866044'}=options;
-  const tex=texture(256,128,(c)=>{
+  const tex=texture(1024,512,(c)=>{
+    c.scale(4,4);
     c.fillStyle=bg;c.fillRect(0,0,256,128);
     c.strokeStyle=border;c.lineWidth=3;c.strokeRect(6,6,244,116);
     c.fillStyle=ink;c.textAlign='center';c.textBaseline='middle';
     c.font='bold '+size+'px monospace';
     textRows.forEach((line,i)=>c.fillText(line,128,64+(i-(textRows.length-1)/2)*size*1.29,228));
   });
+  tex.magFilter=T.LinearFilter;tex.minFilter=T.LinearMipmapLinearFilter;
   return mesh(parent,new T.PlaneGeometry(w,h),basic(0xffffff,tex),x,y,z,false);
 }
 function contact(parent,x,z,rx,rz,y=.007,opacity=.43) {
@@ -238,7 +251,7 @@ function folder(parent,x,z,color,title,angle,number) {
   const index=plaque(hinge,[number],.27,.108,.262,.020,-.223,{bg:'#c8af7e',size:34});
   index.rotation.x=-Math.PI/2;
   const page=plaque(g,['PERSONAL ARCHIVE',title],1.02,.57,.01,.084,.04,{bg:'#e5d4ac',size:27});
-  page.rotation.x=-Math.PI/2;
+  page.rotation.x=-Math.PI/2;page.userData.paper=true;
   return {g,hinge,anchor:[0,.107,.40],back};
 }
 function trophy(parent,x,z) {
@@ -301,7 +314,7 @@ function book(parent,x,z) {
 function door(parent,x,z,blue=false) {
   const frame=group(parent,x,0,z);
   const paint=blue?mat(0x425b64):darkWood;
-  box(frame,1.52,2.70,.16,0,1.35,-.022,iron);
+
   for(const side of [-1,1])box(frame,.12,2.78,.19,side*.754,1.39,.025,paint);
   box(frame,1.65,.15,.19,0,2.74,.025,paint);
   const g=group(frame,.68,.055,.08), panel=group(g,-.68,0,0);
@@ -312,7 +325,7 @@ function door(parent,x,z,blue=false) {
   }
   const plate=box(panel,.12,.25,.034,-.51,1.10,.084,gold);
   const knob=sphere(panel,.065,-.51,1.10,.141,goldLight);
-  plaque(frame,blue?['THE STUDY']:['GYMNASIUM'],.76,.16,0,2.29,.165,{bg:blue?'#c2ccbd':'#b19564',ink:'#302c21',size:29});
+
   return {g,panel,plate,knob,anchor:[-.51,1.10,.14]};
 }
 function floorLamp(parent,x,z) {
@@ -404,6 +417,27 @@ export function makeStudy(entries) {
     box(chair,.095,.78,.099,x,.90,.33,darkWood);
   }
   box(chair,.76,.34,.108,0,1.10,.337,wood);
+  // Upholstered reading corner, layered curtains, pottery and framed prints.
+  const linen=mat(0xb8a181), velvet=mat(0x63705a);
+  for(const x of [-4.04,-1.20]){
+    for(let i=0;i<7;i++)box(s,.075,2.24,.12,x+i*.055,1.77,-4.32,linen);
+  }
+  box(s,1.12,.40,.94,-3.62,.34,2.63,wood);
+  box(s,1.06,.22,.90,-3.62,.65,2.63,velvet);
+  box(s,1.12,.74,.18,-3.62,1.04,3.04,velvet);
+  for(const x of [-4.18,-3.06])box(s,.15,.48,1.03,x,.79,2.63,velvet);
+  const pillow=box(s,.49,.43,.16,-3.63,1.03,2.85,mat(0xb88751));pillow.rotation.z=.14;
+  cyl(s,.41,.38,.07,-3.66,.76,1.34,wood);
+  cyl(s,.05,.10,.72,-3.66,.36,1.34,gold);
+  plant(s,-3.66,.80,1.34,.54,1);
+  for(let i=0;i<3;i++){
+    const g=group(s,4.58,1.65+i*.44,1.2+i*.48);g.rotation.y=-Math.PI/2;
+    box(g,.53,.62,.07,0,0,0,darkWood);
+    plaque(g,['BOTANICAL',String(i+1)],.44,.53,0,0,.042,{bg:'#b0ac83',ink:'#4a593e',size:17});
+  }
+  box(s,1.5,.08,.34,3.55,1.63,4.46,wood);
+  plant(s,3.12,1.68,4.43,.7,2);
+  cyl(s,.12,.17,.31,3.85,1.84,4.43,clay[1]);
   return {scene:s,objects,door:doors,chair};
 }
 function line(parent,x,z,w,d,m) {

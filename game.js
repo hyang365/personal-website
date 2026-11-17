@@ -65,6 +65,14 @@ function createGame() {
   screen.tabIndex=0;screen.setAttribute('aria-label','Interactive room');
   world.append(screen);
   const study=makeStudy(entries), court=makeCourt(), hands=makeHands();
+  const worldScene=study.scene;
+  const courtGroup=new T.Group();
+  for(const child of [...court.scene.children])courtGroup.add(child);
+  courtGroup.rotation.y=Math.PI;
+  courtGroup.position.set(8.92,0,-20.8);
+  worldScene.add(courtGroup);
+  court.door.g.parent.visible=false;
+  const courtCamera=new T.PerspectiveCamera();
   const camera=new T.PerspectiveCamera(54,1,.055,70);
   camera.rotation.order='YXZ';
   const handCamera=new T.PerspectiveCamera(54,1,.045,6);
@@ -73,6 +81,7 @@ function createGame() {
   const position=new T.Vector3(0,1.60,3.20);
   const keys=new Set(), scratch=new T.Vector3(), facing=new T.Vector3();
   const neutralPitch=-.232;
+  let doorOpen=false;
   const lookButton=$('look-button');
   const alerts={time:0,text:''};
   let yaw=0,pitch=neutralPitch,seated=true,room=study,hover=null,labelHover=null;
@@ -136,13 +145,14 @@ function createGame() {
       bounds.dispose();
       hover.edges=new T.LineSegments(edgeGeometry,new T.LineBasicMaterial({color:0xffda79,transparent:true,opacity:.52}));
       hitBox.getCenter(hover.edges.position);
-      room.scene.add(hover.edges);
+      worldScene.add(hover.edges);
     }
   }
 
   const anchor = target => target.source.localToWorld(new T.Vector3(...target.object.anchor));
   const distance = target => {
     const p=anchor(target);
+    if(room===court)courtGroup.worldToLocal(p);
     return Math.hypot(p.x-position.x,p.z-position.z);
   };
   function canUse(target) {
@@ -154,7 +164,12 @@ function createGame() {
   function currentTarget() {
     if(inspection||transition||heldBall||help.open)return null;
     if(labelHover&&!labelHover.button.hidden)return labelHover;
-    ray.setFromCamera(locked?new T.Vector2():mouse,camera);
+    if(room===court){
+      courtCamera.copy(camera);
+      courtCamera.position.set(8.92-position.x,position.y,-20.8-position.z);
+      courtCamera.rotation.y=yaw+Math.PI;courtCamera.updateMatrixWorld();
+    }
+    ray.setFromCamera(locked?new T.Vector2():mouse,room===court?courtCamera:camera);
     const meshes=interactables.filter(t=>t.room===room&&!t.object.ball?.held).flatMap(t=>t.meshes);
     const hit=ray.intersectObjects(meshes,false)[0];
     return hit ? meshTargets.get(hit.object) : null;
@@ -202,13 +217,43 @@ function createGame() {
     const startRotation=camera.quaternion.clone().invert().multiply(target.source.getWorldQuaternion(new T.Quaternion()));
     const type=entries[target.key].kind;
     const isPage=type==='Folder'||type==='Book';
-    const goal=isPage?new T.Vector3(.13,-.37,-1.12):new T.Vector3(0,-.52,-1.14);
-    const rotation=new T.Quaternion().setFromEuler(new T.Euler(isPage?.86:-.055,-.08,isPage?-.065:0));
+    const goal=isPage?new T.Vector3(.34,-.02,-1.00):new T.Vector3(0,-.52,-1.14);
+    const rotation=new T.Quaternion().setFromEuler(new T.Euler(isPage?1.54:-.055,-.08,isPage?-.065:0));
     clone.position.copy(start);clone.quaternion.copy(startRotation);
-    clone.traverse(m=>{if(m.isMesh){m.castShadow=false;m.receiveShadow=false;}});
+    clone.traverse(m=>{if(m.isMesh){m.castShadow=false;m.receiveShadow=false;if(m.userData.paper)m.visible=false;}});
     target.source.visible=false;hands.scene.add(clone);sceneChanged=true;
     inspection={target,clone,hinge,spin,start,startRotation,goal,rotation,isPage,t:0,closing:false,shown:false};
   }
+  const paper=document.createElement('section');
+  paper.className='held-paper';paper.hidden=true;
+  paper.innerHTML='<article><h2></h2><div class="paper-body"></div></article><nav><button aria-label="Previous page">←</button><span></span><button aria-label="Next page">→</button><button>Put back</button></nav>';
+  stage.append(paper);
+  let pageIndex=0,pages=[];
+  function paintPage(){
+    const data=pages[pageIndex];
+    paper.querySelector('h2').textContent=data.title;
+    paper.querySelector('.paper-body').textContent=data.body;
+    paper.querySelector('nav span').textContent=(pageIndex+1)+' / '+pages.length;
+    paper.querySelectorAll('button')[0].disabled=pageIndex===0;
+    paper.querySelectorAll('button')[1].disabled=pageIndex===pages.length-1;
+  }
+  function openPaper(key){
+    const item=entries[key];
+    pages=item.pages??[{title:item.title,body:item.body},{title:'Notes',body:'Add your next page in content.js.'}];
+    pageIndex=0;paintPage();paper.hidden=false;
+  }
+  function closePaper(){paper.hidden=true;if(inspection){inspection.closing=true;inspection.t=1;}canvasFocus();}
+  paper.querySelectorAll('button').forEach((button,index)=>{
+    button.onclick=()=>{
+      if(index===2){closePaper();return;}
+      const next=pageIndex+(index===0?-1:1);
+      if(next<0||next>=pages.length)return;
+      const article=paper.querySelector('article');
+      const animation=article.animate([{transform:'rotateY(0deg)'},{transform:'rotateY(-88deg)',opacity:.5}],{duration:220,easing:'ease-in'});
+      animation.onfinish=()=>{pageIndex=next;paintPage();article.animate([{transform:'rotateY(88deg)',opacity:.5},{transform:'rotateY(0deg)',opacity:1}],{duration:240,easing:'ease-out'});};
+    };
+  });
+  window.addEventListener('keydown',event=>{if(event.key==='Escape'&&!paper.hidden)closePaper();});
   entry.addEventListener('close',()=>{
     if(inspection){inspection.closing=true;inspection.t=1;}
     canvasFocus();
@@ -245,7 +290,7 @@ function createGame() {
     $('interaction-guide').textContent=room===court?'Pick up / shoot':'Inspect';
     $('reset-guide').textContent=room===court?'Reset balls':'Reset view';
     $('score').hidden=room!==court;
-    lookButton.hidden=seated||locked||!invited;
+    lookButton.hidden=locked;
     $('reticle').hidden=!(locked||heldBall);
     screen.classList.toggle('looking',!seated&&!locked);
   }
@@ -263,15 +308,14 @@ function createGame() {
     updateScore();say('Basketballs reset');canvasFocus();
   }
   function useDoor(){
-    const from=room;
-    const to=room===study?court:study;
-    transition={t:0,from,to,swapped:false};
-    highlight(null);labelHover=null;alerts.time=0;keys.clear();
+    doorOpen=!doorOpen;
+    highlight(null);sceneChanged=true;
   }
 
   const limit=(n,a,b)=>Math.max(a,Math.min(n,b));
   const smooth=x=>x*x*(3-2*x);
   function solid(x,z){
+    if(doorOpen&&((room===study&&Math.abs(x-3.05)<.53&&z< -3.9&&z> -5.3)||(room===court&&Math.abs(x-5.87)<.53&&z< -14.9&&z> -16.5)))return false;
     if(room===court)return Math.abs(x)>9.39||Math.abs(z)>15.26
       ||(Math.abs(x)>7.58&&(Math.abs(z-6.3)<3||Math.abs(z+6.3)<3))
       ||(Math.abs(x)<.51&&Math.abs(z)>13.45&&Math.abs(z)<14.36);
@@ -298,7 +342,7 @@ function createGame() {
       }
     }
     step+=dt*(walking?10:3);
-    const y=seated?1.60:1.82;
+    const y=seated?1.45:2.20;
     jump=T.MathUtils.damp(jump,walking&&!reduced?Math.sin(step)*.027:0,14,dt);
     position.y=Math.abs(position.y-y)<.001?y:T.MathUtils.damp(position.y,y,10,dt);
     if(Math.abs(jump)<.001)jump=0;
@@ -307,26 +351,19 @@ function createGame() {
     camera.updateMatrixWorld();
   }
   function doorAnimation(dt) {
-    if(!transition)return;
-    const tr=transition;tr.t+=dt;
-    const doorTime=reduced?.12:.85;
-    if(!tr.swapped){
-      tr.from.door.g.rotation.y=-smooth(limit(tr.t/doorTime,0,1))*1.15;
-      tr.from.door.g.updateMatrixWorld(true);sceneChanged=true;
-      if(tr.t>=doorTime*.54)$('fade').classList.add('on');
-      if(tr.t>=doorTime+.04){
-        tr.swapped=true;room=tr.to;mouse.set(0,0);seated=false;
-        if(room===court){position.set(0,1.82,-3.50);yaw=0;pitch=-.284;mouse.set(0,-.75);}
-        else{
-          position.set(2.9,1.82,-3.47);yaw=Math.PI;pitch=-.01;
-          if(heldBall){heldBall.held=false;heldBall.g.visible=true;heldBall.shadow.visible=true;heldBall=null;chargeStart=null;}
-        }
-        tr.from.door.g.rotation.y=0;
-        updateHud();resize();
-        $('fade').classList.remove('on');
+    const angle=doorOpen?-1.55:0;
+    const old=study.door.g.rotation.y;
+    study.door.g.rotation.y=T.MathUtils.damp(old,angle,8,dt);
+    if(Math.abs(old-angle)>.001)sceneChanged=true;
+    if(!seated&&doorOpen){
+      if(room===study&&position.z < -4.75){
+        position.set(8.92-position.x,position.y,-20.8-position.z);
+        yaw+=Math.PI;room=court;updateHud();
+      }else if(room===court&&position.z < -16.15){
+        position.set(8.92-position.x,position.y,-20.8-position.z);
+        yaw-=Math.PI;room=study;updateHud();
       }
     }
-    if(tr.t>doorTime+.30){transition=null;canvasFocus();}
   }
 
   function readAnimation(dt) {
@@ -336,11 +373,11 @@ function createGame() {
     const t=smooth(i.t);
     i.clone.position.lerpVectors(i.start,i.goal,t);
     i.clone.quaternion.copy(i.startRotation).slerp(i.rotation,t);
-    const scale=i.isPage?.60:.72;
+    const scale=i.isPage?1.05:.72;
     i.clone.scale.setScalar(T.MathUtils.lerp(1,scale,t));
     if(i.hinge)i.hinge.rotation.z=smooth(limit((i.t-.32)/.64,0,1))*2.55;
     if(i.spin)i.spin.rotation.y+=dt*1.18;
-    if(i.t===1&&!i.shown){i.shown=true;showEntry(i.target.key);}
+    if(i.t===1&&!i.shown){i.shown=true;if(i.isPage)openPaper(i.target.key);else showEntry(i.target.key);}
     if(i.t===0&&i.closing){
       i.target.source.visible=true;
       i.clone.removeFromParent();
@@ -352,8 +389,8 @@ function createGame() {
     const ready=heldBall?1:0;
     const z=-.84;
     const limitX=limit(handCamera.aspect*.43,.26,.94);
-    const rx=locked?.29:limit(.26+mouse.x*limitX*.72,-limitX+.13,limitX);
-    const ry=locked?-.33:limit(-.315+mouse.y*.24,-.395,-.135);
+    const rx=.29;
+    const ry=-.39;
     const gripY=inspection?.isPage?-.365:-.33;
     const rightX=ready?.16:T.MathUtils.lerp(rx,inspection?.isPage?.48:.23,t);
     const leftX=ready?-.18:T.MathUtils.lerp(-Math.min(.59,limitX),inspection?.isPage?-.40:-.23,t);
@@ -502,7 +539,7 @@ function createGame() {
   function interactionTarget(){
     const t=currentTarget();
     if(t)return t;
-    if(canUse(room.exit))return room.exit;
+    if(canUse(room.exit)&&!doorOpen)return room.exit;
     if(room===court)return court.balls.map(b=>b.target).filter(canUse).sort((a,b)=>distance(a)-distance(b))[0];
     return null;
   }
@@ -512,7 +549,7 @@ function createGame() {
     mouse.set(limit((e.clientX-bounds.left)/bounds.width*2-1,-1,1),limit(1-(e.clientY-bounds.top)/bounds.height*2,-1,1));
   }
   function turn(dx,dy) {
-    if(seated||transition||inspection||help.open)return;
+    if(transition||inspection||help.open)return;
     yaw-=dx*.0031; pitch=limit(pitch-dy*.0031,-1.29,1.24);
   }
   screen.addEventListener('pointerdown',e=>{
@@ -526,14 +563,8 @@ function createGame() {
   window.addEventListener('pointermove',e=>{
     pointerCoordinates(e);
     if(locked){turn(e.movementX,e.movementY);return;}
-    if(!drag||seated||inspection||e.pointerId!==drag.id)return;
-    const dx=e.clientX-drag.x,dy=e.clientY-drag.y;
-    moved+=Math.abs(dx)+Math.abs(dy);
-    drag.x=e.clientX;drag.y=e.clientY;
-    if(moved>9){
-      if(heldBall&&chargeStart!==null)chargeStart=null;
-      turn(dx,dy);screen.classList.add('dragging');
-    }
+    if(e.target!==screen||inspection||help.open)return;
+    turn(e.movementX,e.movementY);
   });
   screen.addEventListener('pointerdown',()=>beginShot());
   screen.addEventListener('pointerup',e=>{
@@ -598,10 +629,10 @@ function createGame() {
   function frame(now){
     const dt=limit((now-last)/1000,0,.20);last=now;
     doorAnimation(dt);movement(dt);physics(dt);readAnimation(dt);handAnimation(dt);
-    updateLabels();
+    labels.hidden=true;
     const target=currentTarget();
     highlight(target);
-    updatePrompt();
+    prompt.hidden=true;
     screen.classList.toggle('targeted',Boolean(hover));
     $('reticle').hidden=!(locked||heldBall)||Boolean(inspection);
     renderer.shadowMap.autoUpdate=false;
@@ -609,7 +640,15 @@ function createGame() {
     if(sceneChanged){renderer.shadowMap.needsUpdate=true;sceneChanged=false;}
     renderer.setClearColor(room===study?0x3b2518:0x344854);
     renderer.clear();
-    renderer.render(room.scene,camera);
+    let viewCamera=camera;
+    if(room===court){
+      courtCamera.copy(camera);
+      courtCamera.position.set(8.92-position.x,position.y+jump,-20.8-position.z);
+      courtCamera.rotation.y=yaw+Math.PI;
+      courtCamera.updateMatrixWorld();
+      viewCamera=courtCamera;
+    }
+    renderer.render(worldScene,viewCamera);
     renderer.clearDepth();
     renderer.render(hands.scene,handCamera);
     requestAnimationFrame(frame);

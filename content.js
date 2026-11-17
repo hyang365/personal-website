@@ -8,3 +8,13 @@ export const entries = {
   globe: { title: "Globe", kind: "Globe", body: "Places, memories, and travel notes will go here.", links: [] },
   book: { title: "Reading", kind: "Book", body: "Favorite books and reading notes will go here.", links: [] }
 };
+
+// Optional multi-page folder format (each page has title and body).
+// Example: entries.academics.pages = [{ title: 'Education', body: 'Your text' },
+//   { title: 'Projects', body: 'Your next page' }];
+for (const key of ['academics', 'internships', 'hobbies']) {
+  entries[key].pages = [
+    { title: entries[key].title, body: entries[key].body },
+    { title: 'Notes', body: 'Add your notes, projects, or stories here.' }
+  ];
+}

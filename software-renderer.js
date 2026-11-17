@@ -55,13 +55,14 @@ export class SoftwareRenderer {
       return;
     }
     scene.updateMatrixWorld();
+    const frustum=new T.Frustum().setFromProjectionMatrix(new T.Matrix4().multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
     this.near=camera.near+.001;
     this.projectionX=camera.projectionMatrix.elements[0]*this.width*.5;
     this.projectionY=camera.projectionMatrix.elements[5]*this.height*.5;
     this.cool=Boolean(scene.fog);
     const transparent=[];
     scene.traverseVisible(mesh=>{
-      if(!mesh.isMesh)return;
+      if(!mesh.isMesh||!frustum.intersectsObject(mesh))return;
       if(mesh.material.transparent)transparent.push(mesh);
       else this.drawMesh(mesh,camera);
     });

@@ -22,3 +22,11 @@ dialog{color:#33241a;border:1px solid #ae8953;box-shadow:0 0 0 4px #211b13,7px 9
 .entry{position:absolute;inset:15% auto auto 50%;transform:translateX(-50%);margin:0;width:min(390px,calc(100% - 34px));max-height:65%;background:repeating-linear-gradient(0deg,#a78a5b18 0 1px,transparent 1px 24px),#e6d1a6}.entry[open]{animation:none}.entry::backdrop{background:transparent}.entry-top{display:flex;align-items:center;justify-content:space-between;gap:15px}.entry-top .hud-button{padding:2px 7px;font-size:15px}.entry h2,.help h2{font:23px var(--pixel);margin:12px 0 0}.entry-top span{font:12px var(--pixel);color:#784f2f}.entry p{font-size:13px;line-height:1.65;white-space:pre-wrap}.entry a{display:block;color:#5c3924;margin:8px 0}.return-item{margin-top:8px;font-size:12px}.return-item:hover{color:#6b3f23}.help{background:#25241a;color:#efdeb8}.help h2{margin:0}.help dl{margin:18px 0 0;display:grid;grid-template-columns:max-content 1fr;gap:11px 13px;font-size:12px;line-height:1.35}.help dd{margin:0}.unavailable{position:absolute;z-index:4;inset:20% 10%;text-align:center}.unavailable button{margin:4px}.unavailable p{margin-bottom:18px}
 @media(max-width:780px){body{padding:14px}.masthead,.controls{padding-inline:12px}.key-guide{gap:10px}.key-guide>span,.key-guide>button{gap:4px}.key-guide>span:nth-last-child(2){display:none}.stage{height:clamp(380px,calc(100dvh - 154px),850px)}.object-label{font-size:9px;padding:4px}.controls{font-size:10px}.location{left:16px}.pose,.look-button{right:16px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
+.held-paper{position:absolute;z-index:5;left:32%;top:10%;width:56%;height:76%;padding:4%;color:#352d24;background:#f1e6ce;box-shadow:3px 3px 0 #d4c7ab,6px 6px 0 #ddd0b3,0 12px 30px #0005;transform:rotate(-1deg);border:1px solid #baa77e;perspective:1200px}
+.held-paper article{height:88%;overflow:auto;transform-origin:left center;background:#f1e6ce}
+.held-paper h2{font:clamp(24px,3vw,42px) Georgia,serif;font-weight:normal}
+.paper-body{white-space:pre-wrap;font:clamp(15px,1.5vw,22px)/1.65 Georgia,serif}
+.held-paper nav{display:flex;gap:12px;align-items:center;font-size:12px}
+.held-paper button{background:transparent;color:#55432d;border:1px solid #bda880;padding:6px 12px}
+#labels,#prompt{display:none!important}
