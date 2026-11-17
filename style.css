@@ -52,3 +52,7 @@ html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden}
 #shot-zone{position:absolute;inset-block:0;width:15.6%;background:#4eee8d91;border-inline:2px solid #72ffab}
 .shot-meter.green #shot-fill{background:#61f7a3}
 .shot-hint{margin-top:7px;color:#f0e9d5;font:10px/1.2 var(--pixel);text-align:center}
+
+.shot-meter.dunk-ready{width:max-content;max-width:68vw;border-color:#72ffab}
+.dunk-ready .shot-track{display:none}
+.dunk-ready .shot-hint{margin:0;color:#a7ffcb}

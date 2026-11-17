@@ -90,6 +90,7 @@ function createGame() {
   const alerts={time:0,text:''};
   let yaw=0,pitch=neutralPitch,seated=true,room=study,hover=null,labelHover=null;
   let transition=null,inspection=null,heldBall=null,chargeStart=null,attempts=0,made=0;
+  let dunk=null;
   let drag=null, moved=0, bob=0, jump=0, jumpVelocity=0, step=0, simRemainder=0;
   let locked=false, width=0,height=0, sceneChanged=true, invited=false;
   const holdBall=basketball(hands.scene);holdBall.visible=false;
@@ -167,12 +168,12 @@ function createGame() {
   }
   function updateCourtCamera() {
     courtCamera.copy(camera);
-    courtCamera.position.set(8.92-position.x,position.y+jump+bob,-20.8-position.z);
+    courtCamera.position.set(8.92-position.x,camera.position.y,-20.8-position.z);
     courtCamera.rotation.y=yaw+Math.PI;
     courtCamera.updateMatrixWorld();
   }
   function currentTarget() {
-    if(inspection||transition||heldBall||help.open)return null;
+    if(inspection||transition||heldBall||dunk||help.open)return null;
     if(labelHover&&!labelHover.button.hidden)return labelHover;
     ray.setFromCamera(locked?centerAim:mouse,room===court?courtCamera:camera);
     const meshes=interactables.filter(t=>t.room===room&&!t.object.ball?.held).flatMap(t=>t.meshes);
@@ -363,7 +364,7 @@ function createGame() {
     updateHud();canvasFocus();
   }
   function toggleSeat(){
-    if(transition||inspection||help.open)return;
+    if(transition||inspection||dunk||help.open)return;
     const nearChair=room===study&&Math.hypot(position.x,position.z-3.20)<1.21;
     if(!seated&&(!nearChair||jump>0)){
       if(jump===0&&jumpVelocity===0)jumpVelocity=3.65;
@@ -395,9 +396,9 @@ function createGame() {
   }
   const scoreMessage=$('score-message');
   let scoreAnimation;
-  function celebrateBasket(greenRelease){
+  function celebrateBasket(ball){
     scoreMessage.hidden=false;
-    scoreMessage.textContent=greenRelease?'Green release! +1':'Basket! +1';
+    scoreMessage.textContent=ball.dunkRelease?'Windmill dunk! +1':ball.greenRelease?'Green release! +1':'Basket! +1';
     scoreAnimation?.cancel();
     scoreAnimation=scoreMessage.animate(
       reduced?[{opacity:1},{opacity:1,offset:.8},{opacity:0}]:[{opacity:0,transform:'translate(-50%, 10px) scale(.85)'},
@@ -414,7 +415,7 @@ function createGame() {
   }
   function resetCourt(){
     sceneChanged=true;
-    heldBall=null;chargeStart=null;made=0;attempts=0;
+    heldBall=null;dunk=null;chargeStart=null;made=0;attempts=0;
     for(const b of court.balls){
       b.p.copy(b.start);b.v.set(0,0,0);b.held=false;b.shot=false;b.scored=false;
       b.g.visible=true;b.shadow.visible=true;
@@ -445,7 +446,7 @@ function createGame() {
   function movement(dt){
     let walking=false;
     const sprinting=keys.has('shift');
-    if(!seated&&!inspection&&!transition&&!help.open){
+    if(!seated&&!inspection&&!transition&&!dunk&&!help.open){
       const horizontal=Number(keys.has('d')||keys.has('arrowright'))-Number(keys.has('a')||keys.has('arrowleft'));
       const depth=Number(keys.has('w')||keys.has('arrowup'))-Number(keys.has('s')||keys.has('arrowdown'));
       if(horizontal||depth){
@@ -471,7 +472,7 @@ function createGame() {
       if(jump<=0){jump=0;jumpVelocity=0;}
     }
     position.y=Math.abs(position.y-y)<.001?y:T.MathUtils.damp(position.y,y,10,dt);
-    camera.position.set(position.x,position.y+jump+bob,position.z);
+    camera.position.set(position.x,position.y+jump+bob+(dunk?.lift??0),position.z);
     camera.rotation.set(pitch,yaw,0);
     camera.updateMatrixWorld();
   }
@@ -560,14 +561,16 @@ function createGame() {
       hand.root.rotation.set(rx,side*(.26+t*.17),rz);
       hand.joints.forEach((joint,index)=>{joint.rotation.x=-t*.66-ready*.38+(index>0&&!ready&&!t?-.23:0);});
     }
+    if(dunk)windmillPose();
     holdBall.visible=Boolean(heldBall);
+    if(dunk)return;
     if(heldBall){
       holdBall.position.set(.01,-.21,-.99);
       holdBall.scale.setScalar(1.08+(chargeStart!==null?.07*Math.sin(performance.now()/48):0));
     }
   }
   function putBallDown(){
-    if(!heldBall)return;
+    if(!heldBall||dunk)return;
     sceneChanged=true;
     const b=heldBall;heldBall=null;chargeStart=null;b.held=false;b.shot=false;b.scored=false;
     camera.getWorldDirection(facing);
@@ -577,6 +580,84 @@ function createGame() {
   const shotMeter=$('shot-meter'), shotFill=$('shot-fill'), shotZone=$('shot-zone'), shotHint=$('shot-hint');
   const chargeTime=1250, greenHalfWidth=.078, physicsStep=1/120;
   const launchPoint=new T.Vector3(), aimDirection=new T.Vector3();
+  // The free-throw stripe is 4.18 world units in front of the rim.
+  const dunkRadius=4.18;
+  function dunkTarget(){
+    return hoopCenters.find(rim=>Math.hypot(position.x-rim.x,position.z-rim.z)<=dunkRadius);
+  }
+  function startDunk(rim){
+    const end=Math.sign(rim.z);
+    const start=position.clone();
+    const finish=new T.Vector3(0,position.y,rim.z-end*1.04);
+    // Go around the support when starting between the baseline and the wall.
+    const behindSupport=end*start.z>13.42;
+    const side=behindSupport?Math.sign(start.x||1)*Math.max(.92,Math.abs(start.x)):0;
+    const path=behindSupport
+      ? [start,new T.Vector3(side,start.y,start.z),new T.Vector3(side,start.y,finish.z),finish]
+      : [start,finish];
+    const segments=path.slice(1).map((point,index)=>point.distanceTo(path[index]));
+    dunk={rim,path,segments,length:segments.reduce((a,b)=>a+b,0),
+      startYaw:yaw,startPitch:pitch,t:0,lift:0,released:false};
+    jump=jumpVelocity=0;
+    chargeStart=null;
+  }
+  function animateDunk(dt){
+    if(!dunk||help.open)return;
+    const d=dunk;
+    d.t=Math.min(1,d.t+dt/1.32);
+    const t=d.t;
+    let distance=d.length*smooth(limit(t/.69,0,1));
+    for(let i=0;i<d.segments.length;i++){
+      const span=d.segments[i];
+      if(distance<=span||i===d.segments.length-1){
+        position.lerpVectors(d.path[i],d.path[i+1],span?limit(distance/span,0,1):1);
+        break;
+      }
+      distance-=span;
+    }
+    const air=limit((t-.28)/.72,0,1);
+    d.lift=(reduced?.66:1.02)*4*air*(1-air);
+    const dx=d.rim.x-position.x,dz=d.rim.z-position.z;
+    const aimYaw=Math.atan2(-dx,-dz);
+    const yawDelta=Math.atan2(Math.sin(aimYaw-d.startYaw),Math.cos(aimYaw-d.startYaw));
+    const turn=smooth(Math.min(1,t/.28));
+    yaw=d.startYaw+yawDelta*turn;
+    pitch=T.MathUtils.lerp(d.startPitch,
+      Math.atan2(d.rim.y-position.y-d.lift+.12,Math.hypot(dx,dz)),turn);
+    if(t>=.73&&!d.released){
+      d.released=true;
+      const ball=heldBall;
+      heldBall=null;
+      ball.held=false;ball.shot=true;ball.scored=false;
+      ball.greenRelease=false;ball.dunkRelease=true;
+      ball.p.set(d.rim.x,d.rim.y+.27,d.rim.z);
+      ball.v.set(0,-3.8,0);
+      ball.g.visible=true;ball.shadow.visible=true;
+      attempts++;
+      updateScore();
+    }
+    if(t===1)dunk=null;
+  }
+  function windmillPose(){
+    const t=dunk.t;
+    const rise=smooth(limit((t-.13)/.19,0,1));
+    const turn=limit((t-.32)/.41,0,1);
+    const angle=turn*Math.PI*2;
+    // The right hand and ball share the same circular path. The left arm balances the swing.
+    const swingX=.07+.32*Math.sin(angle);
+    const swingY=.02+.30*Math.cos(angle);
+    const follow=smooth(limit((t-.73)/.27,0,1));
+    const x=T.MathUtils.lerp(T.MathUtils.lerp(.01,swingX,rise),.29,follow);
+    const y=T.MathUtils.lerp(T.MathUtils.lerp(-.21,swingY,rise),-.39,follow);
+    const depth=T.MathUtils.lerp(-1.04-.12*Math.sin(Math.PI*turn),-.84,follow);
+    hands.right.root.position.set(x+.07,y-.105,depth+.075);
+    hands.right.root.rotation.set(.42+.30*Math.sin(angle)*rise,-.30,-.69*Math.sin(angle)*rise);
+    hands.left.root.position.set(-.18-.28*rise*(1-follow),-.275+.15*rise*Math.sin(angle*.5),-.86);
+    hands.left.root.rotation.set(.48,.32,.48*rise*(1-follow));
+    holdBall.position.set(x,y,depth);
+    holdBall.rotation.z=-angle;
+    holdBall.scale.setScalar(1.08);
+  }
   function shotTarget(){
     camera.getWorldDirection(facing);
     launchPoint.copy(camera.position).addScaledVector(facing,.58);
@@ -594,8 +675,14 @@ function createGame() {
     return limit(.22+distance*.031,.24,.89);
   }
   function updateShotMeter(now){
-    shotMeter.hidden=room!==court||!heldBall||help.open;
+    shotMeter.hidden=room!==court||!heldBall||Boolean(dunk)||help.open;
     if(shotMeter.hidden)return;
+    const inDunkRange=Boolean(dunkTarget());
+    shotMeter.classList.toggle('dunk-ready',inDunkRange);
+    if(inDunkRange){
+      shotHint.textContent='Click or F · Windmill dunk';
+      return;
+    }
     const target=shotTarget();
     const power=chargeStart===null?0:limit((now-chargeStart)/chargeTime,0,1);
     shotZone.hidden=!target;
@@ -605,14 +692,19 @@ function createGame() {
     shotHint.textContent=!target?'Aim toward a hoop':chargeStart===null?'Hold click or F to shoot':'Release in the green';
   }
   function beginShot(){
-    if(room===court&&heldBall&&chargeStart===null&&!help.open&&!transition)chargeStart=performance.now();
+    if(room!==court||!heldBall||dunk||chargeStart!==null||help.open||transition)return;
+    const rim=dunkTarget();
+    if(rim)startDunk(rim);
+    else chargeStart=performance.now();
   }
   function releaseShot(){
-    if(!heldBall||chargeStart===null)return;
+    if(!heldBall||dunk||chargeStart===null)return;
+    const rim=dunkTarget();
+    if(rim){startDunk(rim);return;}
     const power=limit((performance.now()-chargeStart)/chargeTime,0,1);
     const target=shotTarget();
     const b=heldBall;heldBall=null;chargeStart=null;b.held=false;b.shot=true;b.scored=false;
-    b.greenRelease=false;
+    b.greenRelease=false;b.dunkRelease=false;
     b.p.copy(launchPoint);
     if(target){
       const dx=target.x-b.p.x, dz=target.z-b.p.z, span=Math.hypot(dx,dz);
@@ -667,7 +759,7 @@ function createGame() {
           if(priorY<rim.y||b.p.y>=rim.y||b.v.y>=0)continue;
           const f=(priorY-rim.y)/(priorY-b.p.y);
           const radius=Math.hypot(T.MathUtils.lerp(priorX,b.p.x,f)-rim.x,T.MathUtils.lerp(priorZ,b.p.z,f)-rim.z);
-          if(radius<.166&&b.shot&&!b.scored){b.scored=true;made++;updateScore();celebrateBasket(b.greenRelease);}
+          if(radius<.166&&b.shot&&!b.scored){b.scored=true;made++;updateScore();celebrateBasket(b);}
           else if(radius<.348&&radius>=.166){b.p.y=rim.y+.02;b.v.y*=-.38;b.v.z*=.70;b.v.x+=b.p.x>0?.58:-.58;}
         }
       }
@@ -732,7 +824,7 @@ function createGame() {
     mouse.set(limit((e.clientX-bounds.left)/bounds.width*2-1,-1,1),limit(1-(e.clientY-bounds.top)/bounds.height*2,-1,1));
   }
   function turn(dx,dy) {
-    if(transition||inspection||help.open)return;
+    if(transition||inspection||dunk||help.open)return;
     const sensitivity=Number($('sensitivity').value)*.001;
     yaw-=dx*sensitivity; pitch=limit(pitch-dy*sensitivity,-1.29,1.24);
   }
@@ -825,7 +917,7 @@ function createGame() {
   let last=performance.now();
   function frame(now){
     const dt=limit((now-last)/1000,0,.12);last=now;
-    doorAnimation(dt);movement(dt);physics(dt);readAnimation(dt);handAnimation(dt);
+    doorAnimation(dt);animateDunk(dt);movement(dt);physics(dt);readAnimation(dt);handAnimation(dt);
     if(room===court)updateCourtCamera();
     updateShotMeter(now);
     labels.hidden=true;
@@ -833,7 +925,7 @@ function createGame() {
     highlight(target);
     prompt.hidden=true;
     screen.classList.toggle('targeted',Boolean(hover));
-    $('reticle').hidden=!(locked||heldBall)||Boolean(inspection);
+    $('reticle').hidden=!(locked||heldBall)||Boolean(inspection||dunk);
     renderer.shadowMap.autoUpdate=false;
     renderer.invalidate=sceneChanged;
     if(sceneChanged){renderer.shadowMap.needsUpdate=true;sceneChanged=false;}
