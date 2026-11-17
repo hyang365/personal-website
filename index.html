@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#161812">
 <meta name="description" content="Explore Hunter Yang's interactive first-person portfolio.">
 <title>Hunter Yang — Personal Archive</title>
-<link rel="stylesheet" href="./style.css">
+<link rel="stylesheet" href="./style.css?v=court-journal">
 </head>
 <body>
 <main class="frame">
@@ -24,6 +24,7 @@
       <button id="look-button" class="look-button" type="button" hidden>Capture mouse</button>
       <div id="reticle" class="reticle" hidden aria-hidden="true">+</div>
       <div id="score" class="score" hidden>MADE <strong>0</strong> <span>/</span> <small>0</small></div>
+      <div id="score-message" role="status" class="score-message" hidden></div>
       <div id="prompt" class="prompt" aria-live="polite">Point at an object to inspect it</div>
       <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
     </div>
@@ -46,6 +47,6 @@
     <button id="reset-button" type="button" class="reset"><span aria-hidden="true">↺</span><span id="reset-guide">Reset view</span></button>
   </footer>
 </main>
-<script type="module" src="./game.js"></script>
+<script type="module" src="./game.js?v=court-journal"></script>
 </body>
 </html>

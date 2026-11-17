@@ -40,3 +40,7 @@ html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden}
 .settings-actions button{background:#393828;color:#ecdcb9;border:1px solid #7a6d4b;padding:9px 12px;font:12px var(--mono)}
 
 .stage.reading .screen-effect{opacity:0}
+
+.score-message{position:absolute;top:12%;left:50%;transform:translateX(-50%);white-space:nowrap;
+  font:clamp(24px,5vw,64px)/1 var(--pixel);color:#ffe194;text-shadow:3px 3px #163144,0 0 24px #e2a048aa}
+@media(prefers-reduced-motion:reduce){.score-message{animation:none}}

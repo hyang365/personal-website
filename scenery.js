@@ -342,7 +342,7 @@ function book(parent,x,z) {
   const cover=plaque(hinge,['FIELD','NOTES'],.65,.47,.434,.016,0,{bg:'#777856',ink:'#e5c98c',border:'#c0a365',size:30});
   cover.rotation.x=-Math.PI/2;
   const inside=plaque(g,['READING JOURNAL'],.65,.48,0,.137,0,{bg:'#e3d2ab',size:24});
-  inside.rotation.x=-Math.PI/2;
+  inside.rotation.x=-Math.PI/2;inside.userData.paper=true;
   return {g,hinge,anchor:[0,.20,-.04]};
 }
 function door(parent,x,z,blue=false) {
@@ -562,7 +562,7 @@ export function makeCourt() {
   arc(s,0,0,1.80,0,TAU,linePaint);
   const keyPaint=mat(0x536e79);
   for(const end of [-1,1]){
-    line(s,0,end*11.09,4.85,5.72,keyPaint);
+    box(s,4.85,.006,5.72,0,.003,end*11.09,keyPaint,false);
     for(const x of [-2.45,2.45])line(s,x,end*11.09,.056,5.76,linePaint);
     line(s,0,end*8.23,4.89,.056,linePaint);
     arc(s,0,end*8.23,1.80,end===1?0:Math.PI,Math.PI,linePaint);
@@ -582,6 +582,7 @@ export function makeCourt() {
     const g=group(s,x,0,z);
     const mesh=basketball(g);mesh.position.y=.124;
     const shadow=contact(s,x,z,.29,.29,.021,.47);
+    mesh.userData.dynamic=true;shadow.userData.dynamic=true;
     return {g,mesh,shadow,start:new T.Vector3(x,.124,z),p:new T.Vector3(x,.124,z),v:new T.Vector3(),shot:false,scored:false};
   });
   return {scene:s,door:doors,balls};

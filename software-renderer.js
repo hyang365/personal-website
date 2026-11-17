@@ -48,27 +48,40 @@ export class SoftwareRenderer {
 
   render(scene,camera) {
     const isWorld=scene.background!==null;
-    const cached=this.views.get(scene);
+    let cached=this.views.get(scene);
     camera.updateMatrixWorld();
-    if(isWorld&&cached?.matrix.equals(camera.matrixWorld)&&!this.invalidate){
-      this.pixels.set(cached.pixels);
-      return;
-    }
+    const reuseStatic=isWorld&&cached?.matrix.equals(camera.matrixWorld)&&!this.invalidate;
     scene.updateMatrixWorld();
     const frustum=new T.Frustum().setFromProjectionMatrix(new T.Matrix4().multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
     this.near=camera.near+.001;
     this.projectionX=camera.projectionMatrix.elements[0]*this.width*.5;
     this.projectionY=camera.projectionMatrix.elements[5]*this.height*.5;
     this.cool=Boolean(scene.fog);
-    const transparent=[];
+
+    const transparent=[], dynamic=[];
+    if(reuseStatic){
+      this.pixels.set(cached.pixels);
+      this.depth.set(cached.depth);
+    }
     scene.traverseVisible(mesh=>{
-      if(!mesh.isMesh||!frustum.intersectsObject(mesh))return;
-      if(mesh.material.transparent)transparent.push(mesh);
+      if(!mesh.isMesh||reuseStatic&&!mesh.userData.dynamic||!frustum.intersectsObject(mesh))return;
+      if(isWorld&&mesh.userData.dynamic)dynamic.push(mesh);
+      else if(mesh.material.transparent)transparent.push(mesh);
       else this.drawMesh(mesh,camera);
     });
     for(const mesh of transparent)this.drawMesh(mesh,camera);
     if(isWorld){
-      this.views.set(scene,{matrix:camera.matrixWorld.clone(),pixels:new Uint32Array(this.pixels)});
+      if(!reuseStatic){
+        if(!cached){
+          cached={matrix:new T.Matrix4(),pixels:new Uint32Array(this.pixels.length),depth:new Float32Array(this.depth.length)};
+          this.views.set(scene,cached);
+        }
+        cached.matrix.copy(camera.matrixWorld);
+        cached.pixels.set(this.pixels);
+        cached.depth.set(this.depth);
+      }
+      for(const mesh of dynamic)if(!mesh.material.transparent)this.drawMesh(mesh,camera);
+      for(const mesh of dynamic)if(mesh.material.transparent)this.drawMesh(mesh,camera);
     }else{
       this.context.putImageData(this.image,0,0);
     }

@@ -18,3 +18,10 @@ for (const key of ['academics', 'internships', 'hobbies']) {
     { title: 'Notes', body: 'Add your notes, projects, or stories here.' }
   ];
 }
+
+entries.book.pages = [
+  { title: 'Reading journal', body: entries.book.body },
+  { title: 'Bookshelf', body: 'Keep a list of books you have read or want to read.' },
+  { title: 'Reading notes', body: 'Write down the ideas you want to come back to.' },
+  { title: 'Favorite passages', body: 'Save a passage and a note about why it stood out.' }
+];

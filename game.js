@@ -1,7 +1,7 @@
 import * as T from './vendor/three.module.min.js';
-import { entries } from './content.js';
-import { SoftwareRenderer } from './software-renderer.js';
-import { basketball, hoopCenters, makeCourt, makeHands, makeStudy } from './scenery.js';
+import { entries } from './content.js?v=court-journal';
+import { SoftwareRenderer } from './software-renderer.js?v=court-journal';
+import { basketball, hoopCenters, makeCourt, makeHands, makeStudy } from './scenery.js?v=court-journal';
 
 const $ = id => document.getElementById(id);
 const stage = $('stage'), world = $('world'), prompt = $('prompt'), labels = $('labels');
@@ -72,12 +72,16 @@ function createGame() {
   courtGroup.position.set(8.92,0,-20.8);
   worldScene.add(courtGroup);
   court.door.g.parent.visible=false;
+  const threshold=new T.Mesh(new T.BoxGeometry(1.40,.10,.34),
+    new T.MeshStandardMaterial({color:0x755840}));
+  threshold.position.set(3.05,-.054,-4.80);
+  worldScene.add(threshold);
   const courtCamera=new T.PerspectiveCamera();
   const camera=new T.PerspectiveCamera(54,1,.055,70);
   camera.rotation.order='YXZ';
   const handCamera=new T.PerspectiveCamera(54,1,.045,6);
   const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const mouse=new T.Vector2(0,-.85), ray=new T.Raycaster();
+  const mouse=new T.Vector2(0,-.85), centerAim=new T.Vector2(), ray=new T.Raycaster();
   const position=new T.Vector3(0,1.60,3.20);
   const keys=new Set(), scratch=new T.Vector3(), facing=new T.Vector3();
   const neutralPitch=-.232;
@@ -161,15 +165,16 @@ function createGame() {
     if(target.key==='ball')return !target.object.ball.held && distance(target)<3.04 && target.object.ball.p.y<2.15;
     return seated||distance(target)<2.45;
   }
+  function updateCourtCamera() {
+    courtCamera.copy(camera);
+    courtCamera.position.set(8.92-position.x,position.y+jump,-20.8-position.z);
+    courtCamera.rotation.y=yaw+Math.PI;
+    courtCamera.updateMatrixWorld();
+  }
   function currentTarget() {
     if(inspection||transition||heldBall||help.open)return null;
     if(labelHover&&!labelHover.button.hidden)return labelHover;
-    if(room===court){
-      courtCamera.copy(camera);
-      courtCamera.position.set(8.92-position.x,position.y,-20.8-position.z);
-      courtCamera.rotation.y=yaw+Math.PI;courtCamera.updateMatrixWorld();
-    }
-    ray.setFromCamera(locked?new T.Vector2():mouse,room===court?courtCamera:camera);
+    ray.setFromCamera(locked?centerAim:mouse,room===court?courtCamera:camera);
     const meshes=interactables.filter(t=>t.room===room&&!t.object.ball?.held).flatMap(t=>t.meshes);
     const hit=ray.intersectObjects(meshes,false)[0];
     return hit ? meshTargets.get(hit.object) : null;
@@ -216,19 +221,24 @@ function createGame() {
     const start=camera.worldToLocal(original);
     const startRotation=camera.quaternion.clone().invert().multiply(target.source.getWorldQuaternion(new T.Quaternion()));
     const type=entries[target.key].kind;
-    const isPage=type==='Folder'||type==='Book';
-    const goal=isPage?new T.Vector3(.59*Math.min(1,handCamera.aspect/1.35),-.035,-1.78):new T.Vector3(0,-.52,-1.14);
+    const isBook=type==='Book', isPage=type==='Folder'||isBook;
+    const goal=isBook?new T.Vector3(.42,0,-1.30):isPage?new T.Vector3(.59*Math.min(1,handCamera.aspect/1.35),-.035,-1.78):new T.Vector3(0,-.52,-1.14);
     const rotation=new T.Quaternion().setFromEuler(new T.Euler(isPage?Math.PI/2:-.055,isPage?0:-.08,0));
     clone.position.copy(start);clone.quaternion.copy(startRotation);
     clone.traverse(m=>{if(m.isMesh){m.castShadow=false;m.receiveShadow=false;if(m.userData.paper)m.visible=false;}});
     target.source.visible=false;hands.scene.add(clone);sceneChanged=true;
-    inspection={target,clone,hinge,spin,start,startRotation,goal,rotation,isPage,t:0,closing:false,shown:false};
+    inspection={target,clone,hinge,spin,start,startRotation,goal,rotation,isPage,isBook,t:0,closing:false,shown:false};
   }
-  function paperTexture(page,index,total){
+  function paperTexture(page,index,total,isBook){
     const canvas=document.createElement('canvas');
     canvas.width=2048;canvas.height=1344;
     const c=canvas.getContext('2d');
     c.fillStyle='#f4ecd9';c.fillRect(0,0,2048,1344);
+    if(isBook){
+      const gutter=c.createLinearGradient(index%2?0:2048,0,index%2?115:1933,0);
+      gutter.addColorStop(0,'#a48b6259');gutter.addColorStop(1,'#a48b6200');
+      c.fillStyle=gutter;c.fillRect(0,0,2048,1344);
+    }
     c.fillStyle='#383128';c.font='100px Georgia';c.fillText(page.title,140,180,1760);
     c.strokeStyle='#c7b897';c.lineWidth=2;c.beginPath();c.moveTo(140,230);c.lineTo(1900,230);c.stroke();
     c.font='60px Georgia';
@@ -244,7 +254,7 @@ function createGame() {
       c.fillText(line,140,y);y+=104;
     }
     c.font='40px monospace';c.fillStyle='#82745c';
-    c.fillText('← Previous     '+(index+1)+' / '+total+'     Next →',140,1245);
+    c.fillText(isBook?String(index+1):'← Previous     '+(index+1)+' / '+total+'     Next →',140,1245);
     c.textAlign='right';c.fillText('ESC · Put back',1900,1245);
     const texture=new T.CanvasTexture(canvas);
     texture.colorSpace=T.SRGBColorSpace;
@@ -271,28 +281,54 @@ function createGame() {
         sheets.push({title:page.title,body:lines.slice(at,at+8).join('\n')});
       return sheets;
     });
+    if(i.isBook&&i.pages.length%2)i.pages.push({title:'',body:''});
     i.pageIndex=0;
-    i.pageMaps=i.pages.map((page,index)=>paperTexture(page,index,i.pages.length));
-    const pivot=new T.Group();pivot.position.set(-.58,.105,.04);
-    const sheet=new T.Mesh(new T.PlaneGeometry(1.16,.74),
-      new T.MeshBasicMaterial({map:i.pageMaps[0],side:T.DoubleSide}));
-    sheet.rotation.x=-Math.PI/2;sheet.position.x=.58;
+    i.pageMaps=i.pages.map((page,index)=>paperTexture(page,index,i.pages.length,i.isBook));
+    const pivot=new T.Group();
+    pivot.position.set(i.isBook?-.434:-.58,i.isBook?.166:.105,i.isBook?0:.04);
+    const pageWidth=i.isBook?.78:1.16;
+    const geometry=new T.PlaneGeometry(pageWidth,i.isBook?.615:.74);
+    const sheet=new T.Mesh(geometry,new T.MeshBasicMaterial({map:i.pageMaps[i.isBook?1:0]}));
+    sheet.rotation.x=-Math.PI/2;
+    sheet.position.x=pageWidth/2+(i.isBook?.016:0);
     pivot.add(sheet);i.clone.add(pivot);
+    if(i.isBook){
+      const left=sheet.clone();
+      left.material=new T.MeshBasicMaterial({map:i.pageMaps[0]});
+      left.position.x=-sheet.position.x;
+      pivot.add(left);i.leftPage=left;
+    }
     i.paperPivot=pivot;i.paperMesh=sheet;i.flip=null;
     stage.classList.add('reading');resize();
   }
   function turnPage(direction){
     const i=inspection;
     if(!i?.paperMesh||i.flip||i.closing)return;
-    const next=i.pageIndex+direction;
+    const next=i.pageIndex+direction*(i.isBook?2:1);
     if(next<0||next>=i.pages.length)return;
-    const turning=i.paperMesh.clone();
-    turning.material=i.paperMesh.material.clone();
+
     const pivot=new T.Group();pivot.position.copy(i.paperPivot.position);
-    pivot.position.y+=.008;pivot.add(turning);i.clone.add(pivot);
-    i.flip={pivot,mesh:turning,t:0,next,direction};
-    if(direction>0)i.paperMesh.material.map=i.pageMaps[next];
-    else{turning.material.map=i.pageMaps[next];pivot.rotation.z=Math.PI;}
+    pivot.position.y+=.008;
+    const front=i.paperMesh.clone();
+    front.material=new T.MeshBasicMaterial({map:i.pageMaps[i.isBook?(direction>0?i.pageIndex+1:next+1):(direction>0?i.pageIndex:next)]});
+    pivot.add(front);i.clone.add(pivot);
+    let back;
+    if(i.isBook){
+      back=front.clone();
+      back.rotateY(Math.PI);
+      back.material=new T.MeshBasicMaterial({map:i.pageMaps[direction>0?next:i.pageIndex]});
+      pivot.add(back);
+      if(direction>0)i.paperMesh.material.map=i.pageMaps[next+1];
+      else i.leftPage.material.map=i.pageMaps[next];
+    }else if(direction>0)i.paperMesh.material.map=i.pageMaps[next];
+    pivot.rotation.z=direction>0?0:Math.PI;
+    i.flip={pivot,front,back,t:0,next,direction};
+  }
+  function removePageTurn(i){
+    i.flip.pivot.removeFromParent();
+    i.flip.front.material.dispose();
+    i.flip.back?.material.dispose();
+    i.flip=null;
   }
   function closePaper(){
     if(inspection?.isPage){inspection.closing=true;inspection.t=1;}
@@ -340,9 +376,25 @@ function createGame() {
     $('interaction-guide').textContent=room===court?'Pick up / shoot':'Inspect';
     $('reset-guide').textContent=room===court?'Reset balls':'Reset view';
     $('score').hidden=room!==court;
+    if(room!==court)scoreMessage.hidden=true;
     lookButton.hidden=locked;
     $('reticle').hidden=!(locked||heldBall);
     screen.classList.toggle('looking',!seated&&!locked);
+  }
+  const scoreMessage=$('score-message');
+  let scoreAnimation;
+  function celebrateBasket(){
+    scoreMessage.hidden=false;
+    scoreMessage.textContent='Basket! +1';
+    scoreAnimation?.cancel();
+    scoreAnimation=scoreMessage.animate(
+      reduced?[{opacity:1},{opacity:1,offset:.8},{opacity:0}]:[{opacity:0,transform:'translate(-50%, 10px) scale(.85)'},
+       {opacity:1,transform:'translate(-50%, 0) scale(1)',offset:.17},
+       {opacity:1,transform:'translate(-50%, 0) scale(1)',offset:.72},
+       {opacity:0,transform:'translate(-50%, -16px) scale(1.03)'}],
+      {duration:reduced?1050:1250,easing:'ease-out'}
+    );
+    scoreAnimation.onfinish=()=>{scoreMessage.hidden=true;};
   }
   function updateScore(){
     $('score').querySelector('strong').textContent=made;
@@ -355,9 +407,12 @@ function createGame() {
       b.p.copy(b.start);b.v.set(0,0,0);b.held=false;b.shot=false;b.scored=false;
       b.g.visible=true;b.shadow.visible=true;
     }
+    scoreAnimation?.cancel();scoreMessage.hidden=true;
     updateScore();say('Basketballs reset');canvasFocus();
   }
   function useDoor(){
+    // Keep the moving panel clear of a player standing in the threshold.
+    if(doorOpen&&position.z<(room===study?-4.15:-15.17))return;
     doorOpen=!doorOpen;
     highlight(null);sceneChanged=true;
   }
@@ -365,8 +420,8 @@ function createGame() {
   const limit=(n,a,b)=>Math.max(a,Math.min(n,b));
   const smooth=x=>x*x*(3-2*x);
   function solid(x,z){
-    if(doorOpen&&((room===study&&Math.abs(x-3.05)<.53&&z< -3.9&&z> -5.3)||(room===court&&Math.abs(x-5.87)<.53&&z< -14.9&&z> -16.5)))return false;
-    if(room===court)return Math.abs(x)>9.39||Math.abs(z)>15.26
+    if(doorOpen&&study.door.g.rotation.y< -1.30&&((room===study&&Math.abs(x-3.05)<.43&&z< -3.9&&z> -5.3)||(room===court&&Math.abs(x-5.87)<.43&&z< -14.9&&z> -16.5)))return false;
+    if(room===court)return Math.abs(x)>9.18||Math.abs(z)>15.23
       ||(Math.abs(x)>7.58&&(Math.abs(z-6.3)<3||Math.abs(z+6.3)<3))
       ||(Math.abs(x)<.51&&Math.abs(z)>13.45&&Math.abs(z)<14.36);
     if(Math.abs(x)>4.38||Math.abs(z)>4.34)return true;
@@ -424,14 +479,17 @@ function createGame() {
     i.clone.position.lerpVectors(i.start,i.goal,t);
     i.clone.quaternion.copy(i.startRotation).slerp(i.rotation,t);
     const scale=i.isPage?Math.min(1,handCamera.aspect/1.35):.72;
+    if(i.isBook)i.goal.x=.42*scale;
     i.clone.scale.setScalar(T.MathUtils.lerp(1,scale,t));
     if(i.hinge)i.hinge.rotation.z=smooth(limit((i.t-.32)/.64,0,1))*Math.PI;
     if(i.flip){
       const flip=i.flip;flip.t=Math.min(1,flip.t+dt/(reduced?.05:.65));
       flip.pivot.rotation.z=Math.PI*(flip.direction>0?smooth(flip.t):1-smooth(flip.t));
       if(flip.t===1){
-        i.pageIndex=flip.next;i.paperMesh.material.map=i.pageMaps[i.pageIndex];
-        flip.pivot.removeFromParent();flip.mesh.material.dispose();i.flip=null;
+        i.pageIndex=flip.next;
+        i.paperMesh.material.map=i.pageMaps[i.pageIndex+(i.isBook?1:0)];
+        if(i.leftPage)i.leftPage.material.map=i.pageMaps[i.pageIndex];
+        removePageTurn(i);
       }
     }
     if(i.spin)i.spin.rotation.y+=dt*1.18;
@@ -439,7 +497,8 @@ function createGame() {
     if(i.t===0&&i.closing){
       i.target.source.visible=true;
       i.clone.removeFromParent();
-      if(i.flip){i.flip.mesh.material.dispose();i.flip=null;}
+      if(i.flip)removePageTurn(i);
+      i.leftPage?.material.dispose();
       i.pageMaps?.forEach(map=>map.dispose());
       i.paperMesh?.geometry.dispose();i.paperMesh?.material.dispose();
       inspection=null;sceneChanged=true;stage.classList.remove('reading');resize();
@@ -533,7 +592,12 @@ function createGame() {
           b.v.x*=.984;b.v.z*=.984;
           if(Math.hypot(b.v.x,b.v.z)<.055)b.v.set(0,0,0);
         }
-        if(Math.abs(b.p.x)>9.48){b.p.x=Math.sign(b.p.x)*9.48;b.v.x*=-.68;}
+        const nearBleachers=Math.abs(Math.abs(b.p.z)-6.3)<2.85&&b.p.y<1.03;
+        const sideLimit=nearBleachers?7.60:9.39;
+        if(Math.abs(b.p.x)>sideLimit){
+          b.p.x=Math.sign(b.p.x)*sideLimit;
+          if(b.p.x*b.v.x>0)b.v.x*=-.68;
+        }
         if(Math.abs(b.p.z)>15.49){b.p.z=Math.sign(b.p.z)*15.49;b.v.z*=-.68;}
         if(b.p.y>6.94){b.p.y=6.94;b.v.y*=-.61;}
         for(const rim of hoopCenters){
@@ -545,7 +609,7 @@ function createGame() {
           if(priorY<rim.y||b.p.y>=rim.y||b.v.y>=0)continue;
           const f=(priorY-rim.y)/(priorY-b.p.y);
           const radius=Math.hypot(T.MathUtils.lerp(priorX,b.p.x,f)-rim.x,T.MathUtils.lerp(priorZ,b.p.z,f)-rim.z);
-          if(radius<.166&&b.shot&&!b.scored){b.scored=true;made++;updateScore();say('Basket!',1.45);}
+          if(radius<.166&&b.shot&&!b.scored){b.scored=true;made++;updateScore();celebrateBasket();}
           else if(radius<.348&&radius>=.166){b.p.y=rim.y+.02;b.v.y*=-.38;b.v.z*=.70;b.v.x+=b.p.x>0?.58:-.58;}
         }
       }
@@ -702,8 +766,9 @@ function createGame() {
   resize();updateHud();
   let last=performance.now();
   function frame(now){
-    const dt=limit((now-last)/1000,0,.20);last=now;
+    const dt=limit((now-last)/1000,0,.12);last=now;
     doorAnimation(dt);movement(dt);physics(dt);readAnimation(dt);handAnimation(dt);
+    if(room===court)updateCourtCamera();
     labels.hidden=true;
     const target=currentTarget();
     highlight(target);
@@ -711,19 +776,11 @@ function createGame() {
     screen.classList.toggle('targeted',Boolean(hover));
     $('reticle').hidden=!(locked||heldBall)||Boolean(inspection);
     renderer.shadowMap.autoUpdate=false;
-    renderer.invalidate=sceneChanged||(room===court&&court.balls.some(b=>b.v.lengthSq()>.0001));
+    renderer.invalidate=sceneChanged;
     if(sceneChanged){renderer.shadowMap.needsUpdate=true;sceneChanged=false;}
     renderer.setClearColor(room===study?0x3b2518:0x344854);
     renderer.clear();
-    let viewCamera=camera;
-    if(room===court){
-      courtCamera.copy(camera);
-      courtCamera.position.set(8.92-position.x,position.y+jump,-20.8-position.z);
-      courtCamera.rotation.y=yaw+Math.PI;
-      courtCamera.updateMatrixWorld();
-      viewCamera=courtCamera;
-    }
-    renderer.render(worldScene,viewCamera);
+    renderer.render(worldScene,room===court?courtCamera:camera);
     renderer.clearDepth();
     renderer.render(hands.scene,handCamera);
     requestAnimationFrame(frame);
