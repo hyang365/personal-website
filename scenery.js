@@ -292,7 +292,7 @@ function trophy(parent,x,z) {
   const g=group(parent,x,.889,z);
   box(g,.64,.092,.48,0,.048,0,darkWood);
   box(g,.51,.065,.39,0,.116,0,iron);
-  plaque(g,['SWIMMING'],.39,.052,0,.116,.197,{bg:'#b79453',size:34});
+  plaque(g,['DISTINCTIONS'],.39,.052,0,.116,.197,{bg:'#b79453',size:34});
   cyl(g,.16,.22,.07,0,.172,0,gold);
   cyl(g,.10,.07,.25,0,.30,0,goldLight);
   cyl(g,.245,.085,.26,0,.494,0,goldLight,10);

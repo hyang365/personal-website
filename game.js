@@ -1,7 +1,7 @@
 import * as T from './vendor/three.module.min.js';
-import { entries } from './content.js?v=green-release';
+import { entries } from './content.js?v=portfolio';
 import { SoftwareRenderer } from './software-renderer.js?v=green-release';
-import { basketball, hoopCenters, makeCourt, makeHands, makeStudy } from './scenery.js?v=green-release';
+import { basketball, hoopCenters, makeCourt, makeHands, makeStudy } from './scenery.js?v=portfolio';
 
 const $ = id => document.getElementById(id);
 const stage = $('stage'), world = $('world'), prompt = $('prompt'), labels = $('labels');
@@ -12,7 +12,7 @@ function showEntry(key) {
   const {title,kind,body,links}=entries[key];
   $('entry-kind').textContent=kind;
   $('entry-title').textContent=title;
-  $('entry-body').textContent=body;
+  $('entry-body').textContent=body+(entries[key].pages ? '\n\n'+entries[key].pages.map(page=>page.title+'\n'+page.body).join('\n\n') : '');
   entryLinks.replaceChildren();
   for(const {label,url} of links){
     let destination;
@@ -300,7 +300,7 @@ function createGame() {
       pivot.add(left);i.leftPage=left;
     }else{
       const indexMap=paperTexture({
-        title:item.title,body:'Select the right side to turn forward or the left side to go back. You can also use the arrow keys.'
+        title:item.title,body:item.body
       },0,i.pages.length,false,true);
       const indexSheet=sheet.clone();
       indexSheet.material=new T.MeshBasicMaterial({map:indexMap});
